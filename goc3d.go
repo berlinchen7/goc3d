@@ -201,10 +201,11 @@ func parseParameterBlock(bytes []byte, info *C3DInfo) {
 		b[1] = bytes[byteIndex]
 		byteIndex++
 		bits := binary.LittleEndian.Uint16(b)
-		nextBlockStartsAt := int(int16(bits)) + byteIndex
+		nextBlockStartsAt := int(int16(bits)) + byteIndex - 2
 		fmt.Println("Next block starts at", nextBlockStartsAt)
 
 		if groupID > 0 { // we have a parameter
+			fmt.Println("Working on Parameter")
 
 			fmt.Println("byte:", bytes[byteIndex])
 			nrOfBytes := int(int8(bytes[byteIndex]))
@@ -280,7 +281,6 @@ func readParameters(io *bufio.Reader, info *C3DInfo) {
 	bytes := make([]byte, 4, 4)
 	_, err := io.Read(bytes)
 	check(err)
-	fmt.Println("ReadParameters", bytes)
 
 	nrOfParameterBlocks := int(uint8(bytes[3]))
 
