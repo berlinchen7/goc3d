@@ -15,7 +15,6 @@ const (
 	BYTE
 	INTEGER
 	REAL
-	UNKNOWN
 )
 
 type C3DHeader struct {
@@ -33,27 +32,6 @@ type C3DHeader struct {
 	ScaleFactor      float64
 	FrameRate        float64
 	EventLabels      []string
-}
-
-type C3DParameter struct {
-	Name        string
-	GroupID     int
-	DataType    int
-	Dimensions  int
-	Description string
-	Data        []byte
-	Locked      bool
-}
-
-type C3DGroup struct {
-	Name        string
-	ID          int
-	Description string
-}
-
-type C3DInfo struct {
-	Parameters []C3DParameter
-	Groups     []C3DGroup
 }
 
 func (h C3DHeader) String() string {
@@ -89,6 +67,90 @@ func (h C3DHeader) String() string {
 	}
 
 	return str
+}
+
+type C3DParameter struct {
+	Name           string
+	GroupID        int
+	DataType       int
+	NrOfDimensions int
+	Dimensions     []int
+	Description    string
+	DataLength     int
+	ByteData       []byte
+	StringData     []string
+	RealData       []float32
+	IntegerData    []int16
+	Locked         bool
+}
+
+func (p C3DParameter) String() string {
+
+	str := fmt.Sprintf("\nParameter name = %s\n", p.Name)
+	str = fmt.Sprintf("%sGroup ID       = %d\n", str, p.GroupID)
+	switch p.DataType {
+	case CHAR:
+		str = fmt.Sprintf("%sData Type      = CHAR\n", str)
+	case INTEGER:
+		str = fmt.Sprintf("%sData Type      = INTEGER\n", str)
+	case REAL:
+		str = fmt.Sprintf("%sData Type      = REAL\n", str)
+	case BYTE:
+		str = fmt.Sprintf("%sData Type      = BYTE\n", str)
+	}
+
+	dimStr := ""
+	if p.NrOfDimensions > 0 {
+		dimStr = fmt.Sprintf("%s[%d", dimStr, p.Dimensions[0])
+		for i := 1; i < p.NrOfDimensions; i++ {
+			dimStr = fmt.Sprintf("%s,%d", dimStr, p.Dimensions[i])
+		}
+		dimStr = fmt.Sprintf("%s]", dimStr)
+	}
+
+	str = fmt.Sprintf("%sDimensions     = %d %s\n", str, p.NrOfDimensions, dimStr)
+	str = fmt.Sprintf("%sDescription    = %s\n", str, p.Description)
+
+	str = fmt.Sprintf("%sData Length    = %d\n", str, p.DataLength)
+	// str = fmt.Sprintf("%sData           = %s\n", str, p.ByteData)
+	switch p.DataType {
+	case CHAR:
+		for i, v := range p.StringData {
+			str = fmt.Sprintf("%s  Data[%d] = %s\n", str, i, v)
+		}
+	case INTEGER:
+		for i, v := range p.IntegerData {
+			str = fmt.Sprintf("%s  Data[%d] = %d\n", str, i, v)
+		}
+	}
+
+	if p.Locked {
+		str = fmt.Sprintf("%sLocked         = true\n", str)
+	} else {
+		str = fmt.Sprintf("%sLocked         = false\n", str)
+	}
+
+	return str
+}
+
+type C3DGroup struct {
+	Name        string
+	ID          int
+	Description string
+}
+
+func (g C3DGroup) String() string {
+
+	str := fmt.Sprintf("\nGroup name = %s\n", g.Name)
+	str = fmt.Sprintf("%sGroup ID       = %d\n", str, g.ID)
+	str = fmt.Sprintf("%sDescription    = %s\n", str, g.Description)
+
+	return str
+}
+
+type C3DInfo struct {
+	Parameters []C3DParameter
+	Groups     []C3DGroup
 }
 
 func check(err error) {
@@ -132,15 +194,11 @@ func readHeader(io *bufio.Reader) (r C3DHeader) {
 	check(aerr)
 
 	if bytes[0] != 2 {
-		fmt.Println("Not a C3D file")
-		fmt.Println(fmt.Sprintf("First byte is not 2 but %d", bytes[0]))
-		os.Exit(-1)
+		panic(fmt.Sprintf("Not a C3D file. First byte is not 2 but %d", bytes[0]))
 	}
 
 	if bytes[1] != 80 {
-		fmt.Println("Not a C3D file")
-		fmt.Println(fmt.Sprintf("Second byte is not 80 but %d", bytes[1]))
-		os.Exit(-1)
+		panic(fmt.Sprintf("Not a C3D file. Second byte is not 80 but %d", bytes[1]))
 	}
 
 	r.Valid = true
@@ -162,6 +220,50 @@ func readHeader(io *bufio.Reader) (r C3DHeader) {
 	return
 }
 
+func parseStringData(data []byte, dimensions []int) (r []string) {
+	nr := 1
+	strLen := dimensions[len(dimensions)-1]
+	for i := 0; i < len(dimensions)-1; i++ { // last dimension is the string length
+		nr *= dimensions[i]
+	}
+
+	if nr == 0 {
+		return
+	}
+
+	r = make([]string, nr, nr)
+
+	for i := 0; i < nr; i++ {
+		a := i * strLen
+		b := (i + 1) * strLen
+		r[i] = string(data[a:b])
+	}
+
+	return
+}
+
+func parseIntData(data []byte, dimensions []int) (r []int16) {
+	b := make([]byte, 2, 2)
+	nr := 1
+	for i := 0; i < len(dimensions); i++ { // last dimension is the string length
+		nr *= dimensions[i]
+	}
+
+	if nr == 0 {
+		return
+	}
+
+	r = make([]int16, nr, nr)
+
+	for i := 0; i < nr; i++ {
+		b[0] = data[i*2]
+		b[1] = data[(i+1)*2-1]
+		r[i] = int16(binary.LittleEndian.Uint16(b))
+	}
+
+	return
+}
+
 func parseParameterBlock(bytes []byte, info *C3DInfo) {
 	nrOfBytes := len(bytes)
 	byteIndex := 0
@@ -170,21 +272,18 @@ func parseParameterBlock(bytes []byte, info *C3DInfo) {
 	var groups []C3DGroup
 	var parameters []C3DParameter
 
-	fmt.Println("First 20 bytes:")
-	fmt.Println(bytes[0:20])
-
 	for byteIndex < nrOfBytes {
 		nrOfCharactersInName := int(uint8(bytes[byteIndex]))
 		byteIndex++
 
 		// in case there are filling zero-bytes, e.g. at the end of the parameter block
 		if nrOfCharactersInName == 0 {
+			break
 			continue
 		}
 
-		groupID := int(int8(bytes[byteIndex]))
+		groupID := int(int8(bytes[byteIndex])) // byte 2
 		byteIndex++
-		fmt.Println("Found group id ", groupID)
 		locked := false
 		if nrOfCharactersInName < 0 {
 			locked = true
@@ -193,24 +292,22 @@ func parseParameterBlock(bytes []byte, info *C3DInfo) {
 
 		name := string(bytes[byteIndex : byteIndex+nrOfCharactersInName])
 		byteIndex += nrOfCharactersInName
-		fmt.Println(fmt.Sprintf("Found name \"%s\"", name))
 
 		// reading byte offset to next block
 		b[0] = bytes[byteIndex]
-		byteIndex++
-		b[1] = bytes[byteIndex]
-		byteIndex++
-		bits := binary.LittleEndian.Uint16(b)
-		nextBlockStartsAt := int(int16(bits)) + byteIndex - 2
-		fmt.Println("Next block starts at", nextBlockStartsAt)
+		b[1] = bytes[byteIndex+1]
+		offset := int16(binary.LittleEndian.Uint16(b))
+		fmt.Println("##########:", b)
+		fmt.Println("Offset:", offset)
+		nextBlockStartsAt := int(offset) + byteIndex
+		fmt.Println("Next block:", nextBlockStartsAt)
+		fmt.Println("Size:", len(bytes))
+		fmt.Println("Name:", name)
+		byteIndex += 2
 
 		if groupID > 0 { // we have a parameter
-			fmt.Println("Working on Parameter")
-
-			fmt.Println("byte:", bytes[byteIndex])
 			nrOfBytes := int(int8(bytes[byteIndex]))
 			byteIndex++
-			fmt.Println("Nr of Bytes", nrOfBytes)
 
 			dataType := CHAR
 			switch nrOfBytes {
@@ -223,40 +320,62 @@ func parseParameterBlock(bytes []byte, info *C3DInfo) {
 			case 4:
 				dataType = REAL
 			default:
-				// panic(fmt.Sprintf("Wrong number of bytes detected in parsing of parameters: %d", nrOfBytes))
-				dataType = UNKNOWN
+				panic(fmt.Sprintf("Wrong number of bytes detected in parsing of parameters: %d", nrOfBytes))
+				// dataType = UNKNOWN
 			}
 
-			fmt.Println("Data Type", dataType)
+			if nrOfBytes < 0 {
+				nrOfBytes = -nrOfBytes
+			}
 
-			nrOfDimensions := int(int8(bytes[byteIndex]))
+			nrOfDimensions := int(uint8(bytes[byteIndex]))
 			byteIndex++
-			fmt.Println("Nr of Dimensions", nrOfDimensions)
 
 			if nrOfDimensions < 0 || nrOfDimensions > 7 {
 				panic(fmt.Sprintf("Number of dimensions must be in [0,7] but is %d", nrOfDimensions))
 			}
 			dimensions := make([]int, nrOfDimensions, nrOfDimensions)
-			dataSize := 1
+			dataSize := nrOfBytes
+			if dataSize < 0 {
+				dataSize = -dataSize
+			}
 			for i := 0; i < int(nrOfDimensions); i++ {
-				dimensions[i] = int(int8(bytes[byteIndex]))
-				dataSize *= int(dimensions[i])
+				n := int(uint8(bytes[byteIndex]))
+				dimensions[nrOfDimensions-i-1] = n
+				dataSize *= n
 				byteIndex++
 			}
 			data := bytes[byteIndex : byteIndex+dataSize]
-			byteIndex += dataSize + 1
+			byteIndex += dataSize
 
-			descriptionLength := int(uint8(bytes[byteIndex]))
+			var stringData []string
+			var intData []int16
+			var realData []float32
+
+			switch dataType {
+			case CHAR:
+				stringData = parseStringData(data, dimensions)
+			case INTEGER:
+				intData = parseIntData(data, dimensions)
+			}
+
+			descriptionLength := int(int8(bytes[byteIndex]))
 			parameterDescription := ""
 			if descriptionLength > 0 {
 				parameterDescription = string(bytes[byteIndex : byteIndex+descriptionLength])
 			}
 			p := C3DParameter{GroupID: groupID,
-				Name:        name,
-				Description: parameterDescription,
-				DataType:    dataType,
-				Data:        data,
-				Locked:      locked}
+				Name:           name,
+				Description:    parameterDescription,
+				DataType:       dataType,
+				NrOfDimensions: nrOfDimensions,
+				Dimensions:     dimensions,
+				DataLength:     dataSize,
+				ByteData:       data,
+				StringData:     stringData,
+				RealData:       realData,
+				IntegerData:    intData,
+				Locked:         locked}
 			parameters = append(parameters, p)
 
 		} else { // we have a group
@@ -271,7 +390,11 @@ func parseParameterBlock(bytes []byte, info *C3DInfo) {
 			groups = append(groups, g)
 
 		}
-		byteIndex = nextBlockStartsAt
+		if offset > 0 {
+			byteIndex = nextBlockStartsAt
+		} else {
+			break
+		}
 	}
 	info.Groups = groups
 	info.Parameters = parameters
@@ -284,13 +407,14 @@ func readParameters(io *bufio.Reader, info *C3DInfo) {
 
 	nrOfParameterBlocks := int(uint8(bytes[3]))
 
-	fmt.Println(fmt.Sprintf("Nr of Parameter Blocks %d", nrOfParameterBlocks))
+	var block []byte
+	for i := 0; i < nrOfParameterBlocks*512; i++ {
+		b, berr := io.ReadByte()
+		check(berr)
+		block = append(block, b)
+	}
 
-	bytes = make([]byte, nrOfParameterBlocks*512, nrOfParameterBlocks*512)
-	_, err = io.Read(bytes)
-	check(err)
-
-	parseParameterBlock(bytes, info)
+	parseParameterBlock(block, info)
 }
 
 func ReadC3D(filename string, eta bool) {
