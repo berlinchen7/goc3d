@@ -17,148 +17,22 @@ const (
 	REAL
 )
 
-type C3DHeader struct {
-	Valid            bool
-	HasLabels        bool
-	Uses4CharLabels  bool
-	ParameterSection int
-	NrOfTrajectories int
-	NrOfMeasurements int
-	FirstFrame       int
-	LastFrame        int
-	InterpolationGap int
-	DataStart        int
-	NrOfSamples      int
-	ScaleFactor      float64
-	FrameRate        float64
-	EventLabels      []string
-}
-
-func (h C3DHeader) String() string {
-	str := ""
-
-	if h.Valid == true {
-		str = fmt.Sprintf("Valid C3D              = true\n")
-	} else {
-		str = fmt.Sprintf("Valid C3D              = false\n")
-	}
-
-	str = fmt.Sprintf("%sParameter section starts at %d\n", str, h.ParameterSection)
-	str = fmt.Sprintf("%sNumber of trajectories = %d\n", str, h.NrOfTrajectories)
-	str = fmt.Sprintf("%sNumber of measurements = %d\n", str, h.NrOfMeasurements)
-	str = fmt.Sprintf("%sFirst frame            = %d\n", str, h.FirstFrame)
-	str = fmt.Sprintf("%sLast frame             = %d\n", str, h.LastFrame)
-	str = fmt.Sprintf("%sMax gap                = %d\n", str, h.InterpolationGap)
-	str = fmt.Sprintf("%sData start             = %d\n", str, h.DataStart)
-	str = fmt.Sprintf("%sNumber of samples      = %d\n", str, h.NrOfSamples)
-	str = fmt.Sprintf("%sScale factor           = %f\n", str, h.ScaleFactor)
-	str = fmt.Sprintf("%sFrame rate             = %f\n", str, h.FrameRate)
-
-	if h.HasLabels == true {
-		str = fmt.Sprintf("%sHas labels             = true\n", str)
-	} else {
-		str = fmt.Sprintf("%sHas labels             = false\n", str)
-	}
-
-	if h.Uses4CharLabels == true {
-		str = fmt.Sprintf("%sUses 4 Char Labels     = true\n", str)
-	} else {
-		str = fmt.Sprintf("%sUses 4 Char Labels     = false\n", str)
-	}
-
-	return str
-}
-
-type C3DParameter struct {
-	Name           string
-	GroupID        int
-	DataType       int
-	NrOfDimensions int
-	Dimensions     []int
-	Description    string
-	DataLength     int
-	ByteData       []byte
-	StringData     []string
-	RealData       []float32
-	IntegerData    []int16
-	Locked         bool
-}
-
-func (p C3DParameter) String() string {
-
-	str := fmt.Sprintf("\nParameter name = %s\n", p.Name)
-	str = fmt.Sprintf("%sGroup ID       = %d\n", str, p.GroupID)
-	switch p.DataType {
-	case CHAR:
-		str = fmt.Sprintf("%sData Type      = CHAR\n", str)
-	case INTEGER:
-		str = fmt.Sprintf("%sData Type      = INTEGER\n", str)
-	case REAL:
-		str = fmt.Sprintf("%sData Type      = REAL\n", str)
-	case BYTE:
-		str = fmt.Sprintf("%sData Type      = BYTE\n", str)
-	}
-
-	dimStr := ""
-	if p.NrOfDimensions > 0 {
-		dimStr = fmt.Sprintf("%s[%d", dimStr, p.Dimensions[0])
-		for i := 1; i < p.NrOfDimensions; i++ {
-			dimStr = fmt.Sprintf("%s,%d", dimStr, p.Dimensions[i])
-		}
-		dimStr = fmt.Sprintf("%s]", dimStr)
-	}
-
-	str = fmt.Sprintf("%sDimensions     = %d %s\n", str, p.NrOfDimensions, dimStr)
-	str = fmt.Sprintf("%sDescription    = %s\n", str, p.Description)
-
-	str = fmt.Sprintf("%sData Length    = %d\n", str, p.DataLength)
-	// str = fmt.Sprintf("%sData           = %s\n", str, p.ByteData)
-	switch p.DataType {
-	case CHAR:
-		for i, v := range p.StringData {
-			str = fmt.Sprintf("%s  Data[%d] = %s\n", str, i, v)
-		}
-	case INTEGER:
-		for i, v := range p.IntegerData {
-			str = fmt.Sprintf("%s  Data[%d] = %d\n", str, i, v)
-		}
-	}
-
-	if p.Locked {
-		str = fmt.Sprintf("%sLocked         = true\n", str)
-	} else {
-		str = fmt.Sprintf("%sLocked         = false\n", str)
-	}
-
-	return str
-}
-
-type C3DGroup struct {
-	Name        string
-	ID          int
-	Description string
-}
-
-func (g C3DGroup) String() string {
-
-	str := fmt.Sprintf("\nGroup name = %s\n", g.Name)
-	str = fmt.Sprintf("%sGroup ID       = %d\n", str, g.ID)
-	str = fmt.Sprintf("%sDescription    = %s\n", str, g.Description)
-
-	return str
-}
-
-type C3DInfo struct {
-	Parameters []C3DParameter
-	Groups     []C3DGroup
-}
-
 func check(err error) {
 	if err != nil {
 		panic(err)
 	}
 }
 
+func bytesToInt(bytes []byte) (r int) {
+	if len(bytes) != 2 {
+		panic("bytesToInt: only takes two bytes")
+	}
+	bits := binary.LittleEndian.Uint16(bytes)
+	r = int(int16(bits))
+	return
+}
+
+// this function is only used for the header section
 func readWordAsInt(bytes []byte, index int) (r int) {
 	wordIndex := index * 2
 	b := make([]byte, 2, 2)
@@ -169,7 +43,8 @@ func readWordAsInt(bytes []byte, index int) (r int) {
 	return
 }
 
-func read2WordsAsFloat(bytes []byte, index int) (r float64) {
+// this function is only used for the header section
+func read2WordsAsFloat(bytes []byte, index int) (r float32) {
 	wordIndex := index * 2
 	b := make([]byte, 4, 4)
 	b[0] = bytes[wordIndex]
@@ -177,7 +52,7 @@ func read2WordsAsFloat(bytes []byte, index int) (r float64) {
 	b[2] = bytes[wordIndex+2]
 	b[3] = bytes[wordIndex+3]
 	bits := binary.LittleEndian.Uint32(b)
-	r = float64(math.Float32frombits(bits))
+	r = math.Float32frombits(bits)
 	return r
 }
 
@@ -216,6 +91,13 @@ func readHeader(io *bufio.Reader) (r C3DHeader) {
 	r.HasLabels = (readWordAsInt(bytes, 147) == 12345)       // word 148
 	r.Uses4CharLabels = (readWordAsInt(bytes, 149) == 12345) // word 150
 	r.EventLabels = readEventLabels(bytes, 198, 233)         // word 199 - 234
+
+	if r.ScaleFactor < 0 {
+		r.ScaleFactor = -r.ScaleFactor
+		r.UsesInteger = false
+	} else {
+		r.UsesInteger = true
+	}
 
 	return
 }
@@ -257,8 +139,33 @@ func parseIntData(data []byte, dimensions []int) (r []int16) {
 
 	for i := 0; i < nr; i++ {
 		b[0] = data[i*2]
-		b[1] = data[(i+1)*2-1]
+		b[1] = data[i*2+1]
 		r[i] = int16(binary.LittleEndian.Uint16(b))
+	}
+
+	return
+}
+
+func parseRealData(data []byte, dimensions []int) (r []float32) {
+	b := make([]byte, 4, 4)
+	nr := 1
+	for i := 0; i < len(dimensions); i++ { // last dimension is the string length
+		nr *= dimensions[i]
+	}
+
+	if nr == 0 {
+		return
+	}
+
+	r = make([]float32, nr, nr)
+
+	for i := 0; i < nr; i++ {
+		b[0] = data[i*4]
+		b[1] = data[i*4+1]
+		b[2] = data[i*4+2]
+		b[3] = data[i*4+3]
+		bits := binary.LittleEndian.Uint32(b)
+		r[i] = float32(math.Float32frombits(bits))
 	}
 
 	return
@@ -297,12 +204,7 @@ func parseParameterBlock(bytes []byte, info *C3DInfo) {
 		b[0] = bytes[byteIndex]
 		b[1] = bytes[byteIndex+1]
 		offset := int16(binary.LittleEndian.Uint16(b))
-		fmt.Println("##########:", b)
-		fmt.Println("Offset:", offset)
 		nextBlockStartsAt := int(offset) + byteIndex
-		fmt.Println("Next block:", nextBlockStartsAt)
-		fmt.Println("Size:", len(bytes))
-		fmt.Println("Name:", name)
 		byteIndex += 2
 
 		if groupID > 0 { // we have a parameter
@@ -357,6 +259,8 @@ func parseParameterBlock(bytes []byte, info *C3DInfo) {
 				stringData = parseStringData(data, dimensions)
 			case INTEGER:
 				intData = parseIntData(data, dimensions)
+			case REAL:
+				realData = parseRealData(data, dimensions)
 			}
 
 			descriptionLength := int(int8(bytes[byteIndex]))
@@ -400,7 +304,9 @@ func parseParameterBlock(bytes []byte, info *C3DInfo) {
 	info.Parameters = parameters
 }
 
-func readParameters(io *bufio.Reader, info *C3DInfo) {
+func readParameters(io *bufio.Reader) C3DInfo {
+	info := C3DInfo{Parameters: nil, Groups: nil}
+
 	bytes := make([]byte, 4, 4)
 	_, err := io.Read(bytes)
 	check(err)
@@ -408,13 +314,69 @@ func readParameters(io *bufio.Reader, info *C3DInfo) {
 	nrOfParameterBlocks := int(uint8(bytes[3]))
 
 	var block []byte
-	for i := 0; i < nrOfParameterBlocks*512; i++ {
+	for i := 0; i < nrOfParameterBlocks*512-4; i++ {
 		b, berr := io.ReadByte()
 		check(berr)
 		block = append(block, b)
 	}
 
-	parseParameterBlock(block, info)
+	parseParameterBlock(block, &info)
+
+	return info
+}
+
+func parsePointData(bytes []byte, scaleFactor float32) (float32, float32, float32, byte, byte) {
+
+	x := float32(bytesToInt(bytes[0:2])) * scaleFactor
+	y := float32(bytesToInt(bytes[2:4])) * scaleFactor
+	z := float32(bytesToInt(bytes[4:6])) * scaleFactor
+
+	return x, y, z, bytes[6], bytes[7]
+}
+
+func read3DDataOnly(io *bufio.Reader, header C3DHeader) C3DData {
+	data := C3DData{Analog: nil, Point: nil}
+	bytes := make([]byte, 8, 8)
+	nrOfFrames := header.LastFrame - header.FirstFrame
+	nrOfTrajectories := header.NrOfTrajectories
+
+	p := make([][]C3DPoint, nrOfTrajectories, nrOfTrajectories)
+	for i := 0; i < nrOfTrajectories; i++ {
+		p[i] = make([]C3DPoint, nrOfFrames, nrOfFrames)
+	}
+
+	for frame := 0; frame < nrOfFrames; frame++ {
+		for trajectory := 0; trajectory < nrOfTrajectories; trajectory++ {
+			_, err := io.Read(bytes)
+			check(err)
+			x, y, z, cam, res := parsePointData(bytes, header.ScaleFactor)
+			p[trajectory][frame].X = x
+			p[trajectory][frame].Y = y
+			p[trajectory][frame].Z = z
+			p[trajectory][frame].C = cam
+			p[trajectory][frame].Residual = res
+		}
+	}
+
+	data.Point = p
+	return data
+}
+
+func read3DandAnalogData(io *bufio.Reader, header C3DHeader) C3DData {
+	data := C3DData{Analog: nil, Point: nil}
+	return data
+}
+
+func readData(io *bufio.Reader, header C3DHeader) C3DData {
+	var data C3DData
+
+	if header.NrOfMeasurements == 0 {
+		data = read3DDataOnly(io, header)
+	} else {
+		data = read3DandAnalogData(io, header)
+	}
+
+	return data
 }
 
 func ReadC3D(filename string, eta bool) {
@@ -434,22 +396,12 @@ func ReadC3D(filename string, eta bool) {
 
 	bufr := bufio.NewReader(f)
 	header := readHeader(bufr)
+	info := readParameters(bufr)
+	data := readData(bufr, header)
+
 	fmt.Println(header)
-
-	info := C3DInfo{Parameters: nil, Groups: nil}
-
-	readParameters(bufr, &info)
 	fmt.Println(info)
-
-	// for i := 0; i < size; i++ {
-	// v := readWord(bufr)
-
-	// fmt.Println(v)
-
-	// if eta == true {
-	// bar.Increment()
-	// }
-	// }
+	fmt.Println(data)
 
 	if eta == true {
 		bar.Finish()
