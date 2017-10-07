@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-
-	pb "gopkg.in/cheggaaa/pb.v1"
 )
 
 const (
@@ -379,31 +377,22 @@ func readData(io *bufio.Reader, header C3DHeader) C3DData {
 	return data
 }
 
-func ReadC3D(filename string, eta bool) {
+func ReadC3D(filename string, eta bool) (C3DHeader, C3DInfo, C3DData) {
 	f, err := os.Open(filename)
 	defer f.Close()
 	check(err)
 
-	stats, statsErr := f.Stat()
-	check(statsErr)
+	// stats, statsErr := f.Stat()
+	// check(statsErr)
 
-	var size int = int(stats.Size())
-	var bar *pb.ProgressBar
-
-	if eta == true {
-		bar = pb.StartNew(size)
-	}
+	// var size int = int(stats.Size())
 
 	bufr := bufio.NewReader(f)
 	header := readHeader(bufr)
 	info := readParameters(bufr)
 	data := readData(bufr, header)
 
-	fmt.Println(header)
-	fmt.Println(info)
-	fmt.Println(data)
+	fmt.Println(dataframe)
 
-	if eta == true {
-		bar.Finish()
-	}
+	return header, info, data
 }
