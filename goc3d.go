@@ -333,7 +333,7 @@ func parsePointData(bytes []byte, scaleFactor float32) (float32, float32, float3
 }
 
 func read3DDataOnly(io *bufio.Reader, header C3DHeader) C3DData {
-	data := C3DData{Analog: nil, Point: nil}
+	data := C3DData{Analog: nil, Points: nil}
 	bytes := make([]byte, 8, 8)
 	nrOfFrames := header.LastFrame - header.FirstFrame
 	nrOfTrajectories := header.NrOfTrajectories
@@ -356,12 +356,12 @@ func read3DDataOnly(io *bufio.Reader, header C3DHeader) C3DData {
 		}
 	}
 
-	data.Point = p
+	data.Points = p
 	return data
 }
 
 func read3DandAnalogData(io *bufio.Reader, header C3DHeader) C3DData {
-	data := C3DData{Analog: nil, Point: nil}
+	data := C3DData{Analog: nil, Points: nil}
 	return data
 }
 
@@ -377,22 +377,15 @@ func readData(io *bufio.Reader, header C3DHeader) C3DData {
 	return data
 }
 
-func ReadC3D(filename string, eta bool) (C3DHeader, C3DInfo, C3DData) {
+func ReadC3D(filename string) (C3DHeader, C3DInfo, C3DData) {
 	f, err := os.Open(filename)
 	defer f.Close()
 	check(err)
-
-	// stats, statsErr := f.Stat()
-	// check(statsErr)
-
-	// var size int = int(stats.Size())
 
 	bufr := bufio.NewReader(f)
 	header := readHeader(bufr)
 	info := readParameters(bufr)
 	data := readData(bufr, header)
-
-	fmt.Println(dataframe)
 
 	return header, info, data
 }

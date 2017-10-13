@@ -2,7 +2,7 @@ package goc3d
 
 type C3DData struct {
 	Analog []C3DAnalog
-	Point  [][]C3DPoint
+	Points [][]C3DPoint
 }
 
 type C3DPoint struct {
