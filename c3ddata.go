@@ -11,6 +11,7 @@ type C3DPoint struct {
 	Z        float32
 	C        byte
 	Residual byte
+	Valid    bool
 }
 
 type C3DAnalog struct {

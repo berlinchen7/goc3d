@@ -17,7 +17,9 @@ const (
 
 func check(err error) {
 	if err != nil {
-		panic(err)
+		// panic(err)
+		fmt.Println(err)
+		os.Exit(0)
 	}
 }
 
@@ -323,16 +325,29 @@ func readParameters(io *bufio.Reader) C3DInfo {
 	return info
 }
 
-func parsePointData(bytes []byte, scaleFactor float32) (float32, float32, float32, byte, byte) {
+func parseIntPointData(bytes []byte, scaleFactor float32) (float32, float32, float32, byte, byte, bool) {
 
-	x := float32(bytesToInt(bytes[0:2])) * scaleFactor
-	y := float32(bytesToInt(bytes[2:4])) * scaleFactor
-	z := float32(bytesToInt(bytes[4:6])) * scaleFactor
+	x := float32(int16(binary.LittleEndian.Uint16(bytes[0:2]))) * scaleFactor
+	y := float32(int16(binary.LittleEndian.Uint16(bytes[2:4]))) * scaleFactor
+	z := float32(int16(binary.LittleEndian.Uint16(bytes[4:6]))) * scaleFactor
 
-	return x, y, z, bytes[6], bytes[7]
+	ok := int16(binary.LittleEndian.Uint16(bytes[6:8])) > 0
+
+	return x, y, z, bytes[6], bytes[7], ok
 }
 
-func read3DDataOnly(io *bufio.Reader, header C3DHeader) C3DData {
+func parseFloatPointData(bytes []byte, scaleFactor float32) (float32, float32, float32, byte, byte, bool) {
+
+	x := math.Float32frombits(binary.LittleEndian.Uint32(bytes[0:4]))
+	y := math.Float32frombits(binary.LittleEndian.Uint32(bytes[4:8]))
+	z := math.Float32frombits(binary.LittleEndian.Uint32(bytes[8:12]))
+
+	ok := int16(binary.LittleEndian.Uint16(bytes[12:16])) > 0
+
+	return x, y, z, bytes[12], bytes[13], ok
+}
+
+func read3DIntDataOnly(io *bufio.Reader, header C3DHeader) C3DData {
 	data := C3DData{Analog: nil, Points: nil}
 	bytes := make([]byte, 8, 8)
 	nrOfFrames := header.LastFrame - header.FirstFrame
@@ -347,12 +362,42 @@ func read3DDataOnly(io *bufio.Reader, header C3DHeader) C3DData {
 		for trajectory := 0; trajectory < nrOfTrajectories; trajectory++ {
 			_, err := io.Read(bytes)
 			check(err)
-			x, y, z, cam, res := parsePointData(bytes, header.ScaleFactor)
+			x, y, z, cam, res, ok := parseIntPointData(bytes, header.ScaleFactor)
 			p[trajectory][frame].X = x
 			p[trajectory][frame].Y = y
 			p[trajectory][frame].Z = z
 			p[trajectory][frame].C = cam
 			p[trajectory][frame].Residual = res
+			p[trajectory][frame].Valid = ok
+		}
+	}
+
+	data.Points = p
+	return data
+}
+
+func read3DFloatDataOnly(io *bufio.Reader, header C3DHeader) C3DData {
+	data := C3DData{Analog: nil, Points: nil}
+	bytes := make([]byte, 16, 16)
+	nrOfFrames := header.LastFrame - header.FirstFrame
+	nrOfTrajectories := header.NrOfTrajectories
+
+	p := make([][]C3DPoint, nrOfTrajectories, nrOfTrajectories)
+	for i := 0; i < nrOfTrajectories; i++ {
+		p[i] = make([]C3DPoint, nrOfFrames, nrOfFrames)
+	}
+
+	for frame := 0; frame < nrOfFrames; frame++ {
+		for trajectory := 0; trajectory < nrOfTrajectories; trajectory++ {
+			_, err := io.Read(bytes)
+			check(err)
+			x, y, z, cam, res, ok := parseFloatPointData(bytes, header.ScaleFactor)
+			p[trajectory][frame].X = x
+			p[trajectory][frame].Y = y
+			p[trajectory][frame].Z = z
+			p[trajectory][frame].C = cam
+			p[trajectory][frame].Residual = res
+			p[trajectory][frame].Valid = ok
 		}
 	}
 
@@ -369,7 +414,11 @@ func readData(io *bufio.Reader, header C3DHeader) C3DData {
 	var data C3DData
 
 	if header.NrOfMeasurements == 0 {
-		data = read3DDataOnly(io, header)
+		if header.UsesInteger == true {
+			data = read3DIntDataOnly(io, header)
+		} else {
+			data = read3DFloatDataOnly(io, header)
+		}
 	} else {
 		data = read3DandAnalogData(io, header)
 	}
@@ -385,6 +434,8 @@ func ReadC3D(filename string) (C3DHeader, C3DInfo, C3DData) {
 	bufr := bufio.NewReader(f)
 	header := readHeader(bufr)
 	info := readParameters(bufr)
+	fmt.Println(header.DataStart)
+	f.Seek(int64(header.DataStart*512), 0)
 	data := readData(bufr, header)
 
 	return header, info, data
