@@ -9,7 +9,7 @@ import (
 
 	"github.com/kniren/gota/dataframe"
 	"github.com/kniren/gota/series"
-	"github.com/kzahedi/goc3d"
+	"github.com/berlin/goc3d"
 	"github.com/kzahedi/goent/continuous"
 
 	pb "gopkg.in/cheggaaa/pb.v1"

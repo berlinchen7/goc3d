@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/kzahedi/goc3d"
+	"github.com/berlin/goc3d"
 )
 
 func main() {
@@ -13,5 +13,5 @@ func main() {
 	flag.Parse()
 	fmt.Println(*inputPtr)
 
-	goc3d.ReadC3D(*inputPtr, false)
+	goc3d.ReadC3D(*inputPtr)
 }

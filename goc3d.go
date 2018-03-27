@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"io"
 )
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -315,7 +316,7 @@ func readHeader(io *bufio.Reader) (r C3DHeader) {
 	} else {
 		r.UsesInteger = true
 	}
-
+	fmt.Println(r)
 	return
 }
 
@@ -416,18 +417,20 @@ func parseParameterBlock(bytes []byte, info *C3DInfo) {
 
 		name := string(bytes[byteIndex : byteIndex+nrOfCharactersInName])
 		byteIndex += nrOfCharactersInName
-
+		
 		// reading byte offset to next block
 		b[0] = bytes[byteIndex]
 		b[1] = bytes[byteIndex+1]
 		offset := int16(binary.LittleEndian.Uint16(b))
 		nextBlockStartsAt := int(offset) + byteIndex
 		byteIndex += 2
-
 		if groupID > 0 { // we have a parameter
+			if byteIndex == 4173 {
+				fmt.Println("Hello parater")
+			}
 			nrOfBytes := int(int8(bytes[byteIndex]))
 			byteIndex++
-
+			//fmt.Println(nrOfBytes)
 			dataType := CHAR
 			switch nrOfBytes {
 			case -1:
@@ -442,7 +445,6 @@ func parseParameterBlock(bytes []byte, info *C3DInfo) {
 				panic(fmt.Sprintf("Wrong number of bytes detected in parsing of parameters: %d", nrOfBytes))
 				// dataType = UNKNOWN
 			}
-
 			if nrOfBytes < 0 {
 				nrOfBytes = -nrOfBytes
 			}
@@ -648,8 +650,11 @@ func read3DFloatAndAnalogData(io *bufio.Reader, header C3DHeader) C3DData {
 			p[trajectory][frame].C = cam
 			p[trajectory][frame].Residual = res
 			p[trajectory][frame].Valid = ok
-			fmt.Println(frame, trajectory)
-
+			// fmt.Println(frame, trajectory)
+			// fmt.Println(x, y, z)
+			if nfOfSamplesPerFrame > 0 {
+				fmt.Println("aha")
+			}
 			for a := 0; a < nfOfSamplesPerFrame; a++ {
 				_, err = io.Read(b)
 				check(err)
@@ -678,9 +683,9 @@ func read3DIntAndAnalogData(io *bufio.Reader, header C3DHeader) C3DData {
 			_, err := io.Read(bytes)
 			check(err)
 			x, y, z, cam, res, ok := parseIntegerPointData(bytes, header.ScaleFactor)
-			if frame < 2 {
-				fmt.Println(frame, trajectory, x, y, z)
-			}
+			//if frame < 2 {
+			//	fmt.Println(frame, trajectory, x, y, z)
+			//}
 			p[trajectory][frame].X = x
 			p[trajectory][frame].Y = y
 			p[trajectory][frame].Z = z
@@ -699,15 +704,15 @@ func read3DIntAndAnalogData(io *bufio.Reader, header C3DHeader) C3DData {
 
 func readData(io *bufio.Reader, header C3DHeader) C3DData {
 	var data C3DData
-
 	if header.NrOfAnalogSamples == 0 {
 		if header.UsesInteger == true {
+			fmt.Println("hier 2a")
 			data = read3DIntDataOnly(io, header)
 		} else {
+			fmt.Println("hier 2b")
 			data = read3DFloatDataOnly(io, header)
 		}
 	} else {
-		fmt.Println("hier 3")
 		if header.UsesInteger == true {
 			fmt.Println("hier 3a")
 			data = read3DIntAndAnalogData(io, header)
@@ -729,8 +734,35 @@ func ReadC3D(filename string) (C3DHeader, C3DInfo, C3DData) {
 	bufr := bufio.NewReader(f)
 	header := readHeader(bufr)
 	info := readParameters(bufr)
-	f.Seek(int64(header.DataStart*512), 0)
-	data := readData(bufr, header)
+	f.Seek(int64((header.DataStart - 1)*512), io.SeekStart)
+	bufr2 := bufio.NewReader(f)
+	data := readData(bufr2, header)
+	var labels []string
+	for _, p := range info.Parameters {
+		if p.Name == "LABELS" {
+			for _, s := range p.StringData {
+				labels = append(labels, s)
+			}
+		}
+	}
 
+	for _, p := range info.Parameters {
+		if p.Name == "LABELS2" {
+			for _, s := range p.StringData {
+				for _, l := range labels {
+					if l == s {
+						fmt.Println(l, s)
+					}
+				}
+				labels = append(labels, s)
+			}
+		}
+	}
+	fmt.Println(labels[1])
+	for i, d := range data.Points[1] {
+		if i < 20 {
+			fmt.Println(d)
+		}
+	}
 	return header, info, data
 }
