@@ -316,7 +316,7 @@ func readHeader(io *bufio.Reader) (r C3DHeader) {
 	} else {
 		r.UsesInteger = true
 	}
-	fmt.Println(r)
+//	fmt.Println(r)
 	return
 }
 
@@ -632,7 +632,7 @@ func read3DFloatAndAnalogData(io *bufio.Reader, header C3DHeader) C3DData {
 	nrOfTrajectories := header.NrOfTrajectories
 	nfOfSamplesPerFrame := header.NrOfAnalogMeasurements / header.NrOfAnalogSamples
 
-	fmt.Println("Number of Trajectories:", nrOfTrajectories)
+//	fmt.Println("Number of Trajectories:", nrOfTrajectories)
 
 	p := make([][]C3DPoint, nrOfTrajectories, nrOfTrajectories)
 	for i := 0; i < nrOfTrajectories; i++ {
@@ -717,7 +717,7 @@ func readData(io *bufio.Reader, header C3DHeader) C3DData {
 			fmt.Println("hier 3a")
 			data = read3DIntAndAnalogData(io, header)
 		} else {
-			fmt.Println("hier 3b")
+	//		fmt.Println("hier 3b")
 			data = read3DFloatAndAnalogData(io, header)
 		}
 
@@ -737,32 +737,37 @@ func ReadC3D(filename string) (C3DHeader, C3DInfo, C3DData) {
 	f.Seek(int64((header.DataStart - 1)*512), io.SeekStart)
 	bufr2 := bufio.NewReader(f)
 	data := readData(bufr2, header)
-	var labels []string
-	for _, p := range info.Parameters {
-		if p.Name == "LABELS" {
-			for _, s := range p.StringData {
-				labels = append(labels, s)
-			}
-		}
-	}
+	
+// 	// testing for correctness:
+// 	var labels []string
+// 	for _, p := range info.Parameters {
+// 		if p.Name == "LABELS" {
+// 			for _, s := range p.StringData {
+// 				labels = append(labels, s)
+// 			}
+// 		}
+// 	}
 
-	for _, p := range info.Parameters {
-		if p.Name == "LABELS2" {
-			for _, s := range p.StringData {
-				for _, l := range labels {
-					if l == s {
-						fmt.Println(l, s)
-					}
-				}
-				labels = append(labels, s)
-			}
-		}
-	}
-	fmt.Println(labels[1])
-	for i, d := range data.Points[1] {
-		if i < 20 {
-			fmt.Println(d)
-		}
-	}
+// 	for _, p := range info.Parameters {
+// 		if p.Name == "LABELS2" {
+// 			for _, s := range p.StringData {
+// 				for _, l := range labels {
+// 					if l == s {
+// 						fmt.Println(l, s)
+// 					}
+// 				}
+// 				labels = append(labels, s)
+// 			}
+// 		}
+// 	}
+// 	// I am worried that the indices of "labels" would not correspond exactly to indices of "Points"
+// //	fmt.Println(labels[1])
+// 	for i, _ := range data.Points[1] {
+// 		if i < 20 {
+// 			continue//fmt.Println(d)
+// 		}
+// 	}
+
+	
 	return header, info, data
 }

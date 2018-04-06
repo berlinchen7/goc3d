@@ -10,7 +10,7 @@ import (
 	"github.com/kniren/gota/dataframe"
 	"github.com/kniren/gota/series"
 	"github.com/berlin/goc3d"
-	"github.com/kzahedi/goent/continuous"
+	"github.com/kzahedi/goent/continuous/state"
 
 	pb "gopkg.in/cheggaaa/pb.v1"
 )
@@ -27,7 +27,7 @@ func getData(index int, label string, data goc3d.C3DData, useJerk bool) ([]strin
 	labels = append(labels, strings.Trim(label, " ")+".Z")
 	labels = append(labels, strings.Trim(label, " ")+".A")
 
-	fmt.Println("Reading trajectory", index)
+	//fmt.Println("Reading trajectory", index)
 
 	points := data.Points[index]
 
@@ -137,10 +137,16 @@ func main() {
 
 	flag.Parse()
 
+	if _, err := os.Stat(*outputPtr); err == nil {
+  		fmt.Println(fmt.Sprintf("\n%s already exists", *outputPtr))
+  		os.Exit(0)
+	}
+
+
 	fmt.Println(fmt.Sprintf("Working on %s", *inputPtr))
 
 	selectedLabels := strings.Split(*labelsPtr, ",")
-
+	fmt.Println(*labelsPtr)
 	header, info, data := goc3d.ReadC3D(*inputPtr)
 	fmt.Println(header)
 
@@ -180,11 +186,10 @@ func main() {
 		}
 		os.Exit(0)
 	}
-
+	
 	for i := range selectedLabels {
 		selectedLabels[i] = prefix + selectedLabels[i]
 	}
-
 	var df dataframe.DataFrame
 
 	if len(selectedLabels) > 0 { // check if all given labels are found
@@ -195,7 +200,7 @@ func main() {
 			}
 		}
 		if len(notfound) > 0 {
-			fmt.Println("Parameters:", info.Parameters)
+			//fmt.Println("Parameters:", info.Parameters)
 			fmt.Println("Labels not found:")
 			for _, l := range notfound {
 				fmt.Println(" ", l)
@@ -205,21 +210,21 @@ func main() {
 	}
 
 	fmt.Println("Extracting data")
-	bar := pb.StartNew(len(labels))
+	bar := pb.StartNew(len(selectedLabels))
 	var indices []int
 
 	for i, l := range labels {
 		if len(selectedLabels) > 0 && contains(selectedLabels, l) == true {
 			indices = append(indices, i)
-			fmt.Println(i, l)
+	//		fmt.Println(i, l)
 		}
 	}
 
-	fmt.Println(indices)
-
+	//fmt.Println(indices)
+	
 	for _, i := range indices {
 		l := labels[i]
-		fmt.Println("Reading data from", strings.Trim(l, " "), "index", i)
+	//	fmt.Println("Reading data from", strings.Trim(l, " "), "index", i)
 		ls, ds := getData(i, l, data, *useJerk)
 		for j := range ls {
 			d := dataframe.New(
@@ -235,9 +240,10 @@ func main() {
 	}
 	bar.Finish()
 
+	// Not sure what is the functionality:
 	if *exportToCsv == true {
 		csvFilename := strings.Replace(*inputPtr, "c3d", "csv", -1)
-		csvFilename = strings.Replace(csvFilename, "csv", "c3d", 1) // first one must be c3d not csv
+		csvFilename = strings.Replace(csvFilename, "csv", "c3d", 1) // first one must be c3d not csv 
 		fmt.Println("Exporting to", csvFilename)
 		file, _ := os.Create(csvFilename)
 		defer file.Close()
@@ -320,7 +326,7 @@ func main() {
 		index++
 	}
 
-	mcw := continuous.MorphologicalComputationW(w2w1a1, w2Indices, w1Indices, a1Indices, 40, true)
+	mcw := state.MorphologicalComputationW(w2w1a1, w2Indices, w1Indices, a1Indices, 40, true)
 
 	// fmt.Println(mcw)
 	fmt.Println("Result written to", *outputPtr)
