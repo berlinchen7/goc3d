@@ -14,22 +14,31 @@ import numpy as np
 
 #parsing command-line arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('-csv', dest='csvFilePath', default='csv_data/38_04_Liu.csv', type=str, help='input csv file path')
+parser.add_argument('-csvdata', dest='csvDataFilePath', default='csv_data/38_04_Liu.csv', type=str, help='input csv data file path')
+parser.add_argument('-csvheader', dest='csvHeaderFilePath', default='csv_data/headerInfo_default.csv', type=str, help='input csv header file path')
 parser.add_argument('-ma', dest='movingAverage', default='5', type=int, help='size of moving average applied to smooth the output curve')
 parser.add_argument('-o', dest='destFile', default='auxillary_mpg_data/tmp.mov', type=str, help='output animtion file path')
 parser.add_argument('-figsize', dest='figSize', default=800, type=int, help='the size of the range of displayed x-axis')
 
 args = parser.parse_args()
 
-csvFilePath = args.csvFilePath
+csvDataFilePath = args.csvDataFilePath
+csvHeaderFilePath = args.csvHeaderFilePath
 destFile = args.destFile
 movingAverage = args.movingAverage
 figSize = args.figSize
 
-first_frame = 67 #TODO: First frame of the 38_4.c3d file is the 67th frame (1-based). Will need to change this to generalize to other c3d files
+#determining the offset of c3d data
+with open(csvHeaderFilePath, 'rb') as csvFile:
+    r = csv.reader(csvFile, delimiter='\t')
+    for i in r:
+    	item = i[0].replace(" ","").split("=")
+    	if item[0] == 'Firstframe':
+    		first_frame = int(item[1])
+    		break
 
 #extracting the data from csv file
-with open(csvFilePath, 'rb') as csvFile:
+with open(csvDataFilePath, 'rb') as csvFile:
     r = csv.reader(csvFile, delimiter=' ')
     data = [row for row in r][0][1:]
     data[0], data[-1] = data[0][1:], data[-1][:-1] # getting rid of the '[' and ']'

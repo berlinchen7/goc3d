@@ -128,19 +128,20 @@ func contains(lst []string, l string) bool {
 
 func main() {
 	inputPtr := flag.String("i", "/Users/zahedi/projects/habil/data/c3d/c3d/38_04.c3d", "input filename")
-	outputPtr := flag.String("o", "/Users/zahedi/projects/habil/data/c3d/mcw/38_04.txt", "input filename")
+	outputPtr := flag.String("o", "/Users/zahedi/projects/habil/data/c3d/mcw/38_04.txt", "output filename")
+	headerInfoPtr := flag.String("head", "/Users/berlin/go/src/github.com/berlin/goc3d/cmumocap/headerInfo_default.csv", "information about c3d header filename")
 	labelsPtr := flag.String("l", "", "labels")
-	minPtr := flag.Int("n", 1000, "minimum number of data points")
+	minPtr := flag.Int("n", 0, "minimum number of data points") // default was originally 1000
 	printLabelsPtr := flag.Bool("L", false, "print all the labels")
 	exportToCsv := flag.Bool("csv", false, "export to csv")
 	useJerk := flag.Bool("j", false, "use jerk instead of curvature")
 
 	flag.Parse()
 
-	if _, err := os.Stat(*outputPtr); err == nil {
-  		fmt.Println(fmt.Sprintf("\n%s already exists", *outputPtr))
-  		os.Exit(0)
-	}
+	// if _, err := os.Stat(*outputPtr); err == nil {
+ //  		fmt.Println(fmt.Sprintf("\n%s already exists", *outputPtr))
+ //  		os.Exit(0)
+	// }
 
 
 	fmt.Println(fmt.Sprintf("Working on %s", *inputPtr))
@@ -149,6 +150,11 @@ func main() {
 	fmt.Println(*labelsPtr)
 	header, info, data := goc3d.ReadC3D(*inputPtr)
 	fmt.Println(header)
+	
+	fmt.Println(fmt.Sprintf("Writing header information to %s\n", *headerInfoPtr))
+	headerInfo_file, _ := os.Create(*headerInfoPtr)
+	defer headerInfo_file.Close()
+	headerInfo_file.WriteString(fmt.Sprintf("%s\n", header))
 
 	if len(data.Points[0]) < *minPtr {
 		fmt.Println(fmt.Sprintf("skipping because not enough data points (%d<%d)", len(data.Points[0]), *minPtr))

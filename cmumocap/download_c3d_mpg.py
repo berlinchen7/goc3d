@@ -53,7 +53,7 @@ if os.path.isfile(outputMPGFile):
 else:
     print('Downloading .mpg file to ' + outputMPGFile)
     mpg_url = 'http://mocap.cs.cmu.edu/subjects/' + subject + '/' + subject + '_' + trial + '.mpg'
-    assert is_downloadable(mpg_url) == True, "not able to fetch specified mpg file!"
+    assert is_downloadable(mpg_url) == True, "not able to fetch specified mpg file!\n  If .avi file exists, then manually download it, convert it to .mpg file, and run pipeline.sh again."
     mpg_r = requests.get(mpg_url, allow_redirects=True)
     open(outputMPGFile, 'wb').write(mpg_r.content)
     print('mpg file downloaded!')
